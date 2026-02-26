@@ -54,7 +54,7 @@ public class SummonEffectSystem : MonoBehaviour
 
         deck.DrawTopToZone(owner, ZoneType.Mana);
 
-        ManaCountUI.I?.Refresh();
+        ManaCountUI.RefreshOwner(owner);
         if (owner == OwnerType.Player) HandFanLayout.I?.Layout();
         else EnemyHandCountUI.I?.Refresh();
     }

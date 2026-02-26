@@ -1,81 +1,218 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using System.Collections.Generic;
 
-public class CardDrag : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+
+[RequireComponent(typeof(RectTransform))]
+[RequireComponent(typeof(CardController))]
+public class CardDrag : MonoBehaviour,
+    IBeginDragHandler, IDragHandler, IEndDragHandler
 {
-    RectTransform rect;
-    Canvas canvas;
+    RectTransform rt;
+    Canvas rootCanvas;
+    CanvasGroup cg;
     Transform originalParent;
+    Vector2 originalPos;
+
+    CardController card;
+
+    DropZone[] allZones;
 
     void Awake()
     {
-        rect = GetComponent<RectTransform>();
-        if (!rect)
-            Debug.LogError("[CardDrag] RectTransform missing. Attach CardDrag to a UI object.");
+        rt = GetComponent<RectTransform>();
+        card = GetComponent<CardController>();
 
-        canvas = GetComponentInParent<Canvas>();
-        if (!canvas)
-        {
-            // 親から取れない場合はシーン全体から拾う（最前面のCanvasを優先）
-            canvas = FindFirstObjectByType<Canvas>();
-        }
+        rootCanvas = GetComponentInParent<Canvas>();
+        if (rootCanvas == null)
+            rootCanvas = FindFirstObjectByType<Canvas>();
 
-        if (!canvas)
-            Debug.LogError("[CardDrag] Canvas not found in parents or scene.");
+        cg = GetComponent<CanvasGroup>();
+        if (cg == null)
+            cg = gameObject.AddComponent<CanvasGroup>();
+
+        allZones = FindObjectsOfType<DropZone>(true);
     }
+
+    bool CanDrag()
+    {
+        if (card.owner != OwnerType.Player) return false;
+        if (card.currentZone != ZoneType.Hand) return false;
+        if (TurnManager.I != null && !TurnManager.I.isPlayerTurn) return false;
+
+        return true;
+    }
+
+    // =========================
+    // Drag Start
+    // =========================
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (!rect || !canvas)
-        {
-            Debug.LogError($"[CardDrag] BeginDrag blocked. rect={(rect ? "OK" : "NULL")} canvas={(canvas ? canvas.name : "NULL")}");
-            return;
-        }
+        allZones = FindObjectsOfType<DropZone>(true);
+        if (!CanDrag()) return;
 
         originalParent = transform.parent;
-        transform.SetParent(canvas.transform, true); // worldPositionStays=true
-        rect.SetAsLastSibling();
+        originalPos = rt.anchoredPosition;
+
+        cg.blocksRaycasts = false;
+
+        transform.SetParent(rootCanvas.transform, true);
+        transform.SetAsLastSibling();
+
+        HighlightValidZones(true);
+        Debug.Log($"[DragBegin] zones={allZones?.Length}");
     }
+
+    // =========================
+    // Dragging
+    // =========================
 
     public void OnDrag(PointerEventData eventData)
     {
-        if (!rect) return;
-        rect.position = eventData.position;
+        if (!CanDrag()) return;
+
+        rt.position = eventData.position;
     }
+
+    // =========================
+    // Drag End
+    // =========================
 
     public void OnEndDrag(PointerEventData eventData)
     {
-        if (originalParent == null)
+        if (!CanDrag())
         {
-            Debug.LogWarning("[CardDrag] originalParent missing.");
+            Restore();
             return;
         }
 
-        var go = eventData.pointerCurrentRaycast.gameObject;
-        Zone dropZone = go ? go.GetComponentInParent<Zone>() : null;
+        cg.blocksRaycasts = true;
 
-        bool accepted = false;
+        // ★Raycastを自前で取り直す
+        var results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(eventData, results);
 
-        if (dropZone != null && dropZone.isPlayer)
+        DropZone drop = null;
+        GameObject hitGo = null;
+
+        foreach (var r in results)
         {
-            Zone fromZone = originalParent.GetComponentInParent<Zone>();
+            if (r.gameObject == null) continue;
 
-            if (fromZone != null &&
-                fromZone.zoneType == ZoneType.Hand &&
-                dropZone.zoneType == ZoneType.Mana)
+            // ★自分（カード）配下を全部除外する
+            if (r.gameObject.transform.IsChildOf(transform)) 
+                continue;
+
+            hitGo = r.gameObject;
+            drop = r.gameObject.GetComponentInParent<DropZone>();
+            if (drop != null) break;
+        }
+
+        Debug.Log($"[DropRaycastAll] hit={(hitGo ? hitGo.name : "NULL")} drop={(drop ? drop.name : "NULL")} results={results.Count}");
+
+        bool moved = false;
+
+        if (drop != null && drop.owner == OwnerType.Player)
+            moved = TryMove(drop.zoneType);
+
+        if (!moved)
+            Restore();
+
+        HighlightValidZones(false);
+    }
+
+    // =========================
+    // Move Logic
+    // =========================
+
+    bool TryMove(ZoneType toZone)
+    {
+        Debug.Log($"[TryMove] toZone={toZone} phase={TurnManager.I?.CurrentPhase} playedMana={TurnManager.I?.hasPlayedManaThisTurn}");
+        if (card.owner != OwnerType.Player) return false;
+        if (card.currentZone != ZoneType.Hand) return false;
+
+        // ===== Hand → Mana =====
+        if (toZone == ZoneType.Mana)
+        {
+            if (TurnManager.I != null && !TurnManager.I.CanPlayMana())
+                return false;
+
+            bool ok = ZoneManager.I.Move(card, ZoneType.Mana);
+
+            if (ok)
+                TurnManager.I?.OnPlayedMana();
+
+            return ok;
+        }
+
+        // ===== Hand → Battle =====
+        if (toZone == ZoneType.Battle)
+        {
+            if (TurnManager.I != null && !TurnManager.I.CanSummon())
+                return false;
+
+            int cost = card.Cost;
+
+            if (TurnManager.I != null &&
+                !TurnManager.I.TrySpendMana(OwnerType.Player, cost))
+                return false;
+
+            bool ok = ZoneManager.I.Move(card, ZoneType.Battle);
+
+            if (ok)
+                card.SetSummoningSick(true);
+
+            return ok;
+        }
+
+        return false;
+    }
+
+    // =========================
+    // Highlight Zones
+    // =========================
+
+    void HighlightValidZones(bool on)
+    {
+        Debug.Log($"[Highlight] on={on}");
+        foreach (var zone in allZones)
+        {
+            bool valid = false;
+
+            if (card.owner == OwnerType.Player &&
+                card.currentZone == ZoneType.Hand &&
+                zone.owner == OwnerType.Player)
             {
-                if (TurnManager.I != null && TurnManager.I.CanPlayMana())
-                {
-                    transform.SetParent(dropZone.transform, true);
-                    TurnManager.I.OnPlayedMana();
-                    accepted = true;
-                }
+                if (zone.zoneType == ZoneType.Mana &&
+                    TurnManager.I != null &&
+                    TurnManager.I.CanPlayMana())
+                    valid = true;
+
+                if (zone.zoneType == ZoneType.Battle &&
+                    TurnManager.I != null &&
+                    TurnManager.I.CanSummon())
+                    valid = true;
             }
+
+            zone.Highlight(on && valid);
+        }
+    }
+
+    // =========================
+    // Restore
+    // =========================
+
+    void Restore()
+    {
+        cg.blocksRaycasts = true;
+
+        if (originalParent != null)
+        {
+            transform.SetParent(originalParent, false);
+            rt.anchoredPosition = originalPos;
         }
 
-        if (!accepted)
-        {
-            transform.SetParent(originalParent, true);
-        }
+        HandFanLayout.I?.Layout();
     }
 }

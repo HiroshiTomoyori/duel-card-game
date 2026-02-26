@@ -24,32 +24,25 @@ public class PlayManaButton : MonoBehaviour
         {
             bool ok = ZoneManager.I.Move(sel, ZoneType.Mana);
 
-            if (ok)
-            {
-                // マナに置く時は傾きをリセット
-                sel.transform.localRotation = Quaternion.identity;
+        if (ok)
+        {
+            // マナに置く時は傾きをリセット（任意）
+            sel.transform.localRotation = Quaternion.identity;
 
-                SelectionManager.I.Clear();
-                TurnManager.I.OnPlayedMana();
-                Debug.Log("Played mana.");
-                // 選択解除
-                SelectionManager.I.Clear();
+            // 選択解除
+            SelectionManager.I?.Clear();
 
-                // このターンはマナ置き済みにする
-                TurnManager.I.OnPlayedMana();
+            // このターンはマナ置き済みにする（1回だけ！）
+            TurnManager.I?.OnPlayedMana();
 
-                Debug.Log("Played mana.");
+            // マナは数字表示にするのでカードは非表示（ロジックは残る）
+            sel.gameObject.SetActive(false);
 
-                    // マナは数字表示にするので、カードは非表示（ロジックは残る）
-                sel.gameObject.SetActive(false);
+            // マナ表示更新
+            ManaCountUI.RefreshOwner(OwnerType.Player);
 
-                SelectionManager.I.Clear();
-                TurnManager.I.OnPlayedMana();
-
-                ManaCountUI.I?.Refresh();
-
-                Debug.Log("Played mana.");
-            }
+            Debug.Log("Played mana.");
+        }
         }
     }
 }

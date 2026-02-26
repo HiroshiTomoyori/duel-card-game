@@ -78,8 +78,8 @@ public class EnemyAI : MonoBehaviour
         {
             first.gameObject.SetActive(false);
 
-            TurnManager.I.OnPlayedMana();
-            ManaCountUI.I?.Refresh();
+            //TurnManager.I.OnPlayedMana(); // ※このままだと「プレイヤー用フラグ」を立てる可能性あり（後述）
+            ManaCountUI.RefreshOwner(OwnerType.Enemy);
             EnemyHandCountUI.I?.Refresh();
             Debug.Log("[EnemyAI] Played mana");
         }

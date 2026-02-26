@@ -1,21 +1,27 @@
+using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
 public class ManaCountUI : MonoBehaviour
 {
-    public static ManaCountUI I { get; private set; }
+    // OwnerごとにUIを保持（Player/Enemyで共存できる）
+    public static readonly Dictionary<OwnerType, ManaCountUI> ByOwner = new();
 
-    [Header("Player")]
-    public RectTransform playerManaArea;
-    public TMP_Text playerManaText;
-
-    [Header("Enemy")]
-    public RectTransform enemyManaArea;
-    public TMP_Text enemyManaText;
+    [Header("Assign")]
+    public OwnerType owner = OwnerType.Player;
+    public RectTransform manaArea;   // P_ManaArea / E_ManaArea
+    public TMP_Text manaText;        // Txt_ManaCount / Txt_EnemyManaCount
 
     void Awake()
     {
-        I = this;
+        ByOwner[owner] = this;
+        // Debug.Log($"[ManaCountUI] Awake owner={owner} name={name}");
+    }
+
+    void OnDestroy()
+    {
+        if (ByOwner.TryGetValue(owner, out var v) && v == this)
+            ByOwner.Remove(owner);
     }
 
     void Start()
@@ -25,19 +31,29 @@ public class ManaCountUI : MonoBehaviour
 
     public void Refresh()
     {
-        if (playerManaArea && playerManaText)
-            playerManaText.text = $"Mana: {CountCards(playerManaArea)}";
+        if (!manaArea || !manaText) return;
 
-        if (enemyManaArea && enemyManaText)
-            enemyManaText.text = $"Mana: {CountCards(enemyManaArea)}";
+        int total = 0;
+        foreach (Transform child in manaArea)
+            if (child.GetComponent<CardController>() != null) total++;
+
+        int available = 0;
+        var manaCards = ZoneManager.I ? ZoneManager.I.GetCards(owner, ZoneType.Mana) : null;
+        if (manaCards != null)
+        {
+            foreach (var c in manaCards)
+            {
+                if (c == null) continue;
+                if (!c.IsTapped) available++;
+            }
+        }
+
+        manaText.text = $"Mana: {available}/{total}";
     }
 
-    int CountCards(RectTransform area)
+    public static void RefreshOwner(OwnerType o)
     {
-        int c = 0;
-        foreach (Transform child in area)
-            if (child.GetComponent<CardController>() != null)
-                c++;
-        return c;
+        if (ByOwner.TryGetValue(o, out var ui) && ui != null)
+            ui.Refresh();
     }
 }

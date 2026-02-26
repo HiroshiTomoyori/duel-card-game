@@ -4,6 +4,7 @@ using UnityEngine;
 public class ZoneManager : MonoBehaviour
 {
     public static ZoneManager I { get; private set; }
+
     public Sprite enemyHandBackSprite; // Inspectorで back1 を入れる
 
     class Zone
@@ -57,8 +58,18 @@ public class ZoneManager : MonoBehaviour
                 card.ShowBack(enemyHandBackSprite);
         }
 
+        // ✅ マナはカードを消す（データとしては残す）
+        if (zone == ZoneType.Mana)
+            card.gameObject.SetActive(false);
+        else
+            card.gameObject.SetActive(true);
+
         zones[(owner, zone)].cards.Add(card);
         RefreshLayout(owner, zone);
+
+// ✅ マナ表示更新（Player/Enemy両対応）
+if (zone == ZoneType.Mana)
+    ManaCountUI.RefreshOwner(owner);
     }
 
     public bool Move(CardController card, ZoneType toZone)
@@ -76,12 +87,13 @@ public class ZoneManager : MonoBehaviour
         if (!from.cards.Remove(card)) return false;
 
         card.currentZone = toZone;
-        card.transform.SetParent(to.anchor, false);    
-        // ✅ Handに入ったら必ず表示
-        if (toZone == ZoneType.Hand)
+        card.transform.SetParent(to.anchor, false);
+
+        // ✅ マナに入ったら非表示、それ以外は表示
+        if (toZone == ZoneType.Mana)
+            card.gameObject.SetActive(false);
+        else
             card.gameObject.SetActive(true);
-
-
 
         // ✅ 移動後に見た目（スケール等）を一括適用
         card.ApplyZoneVisual();
@@ -97,42 +109,75 @@ public class ZoneManager : MonoBehaviour
 
         RefreshLayout(card.owner, fromKey.Item2);
         RefreshLayout(card.owner, toZone);
+
+    // ✅ マナ表示更新（Player/Enemy両対応）
+    if (fromKey.Item2 == ZoneType.Mana || toZone == ZoneType.Mana)
+    {
+        ManaCountUI.RefreshOwner(card.owner);
+    }
+
         return true;
     }
 
-    void RefreshLayout(OwnerType owner, ZoneType zone)
+void RefreshLayout(OwnerType owner, ZoneType zone)
+{
+    // =========================
+    // Hand
+    // =========================
+
+    // プレイヤー手札（表・扇）
+    if (owner == OwnerType.Player && zone == ZoneType.Hand)
+        HandFanLayout.I?.Layout();
+
+    // 敵手札（裏・逆扇）
+    if (owner == OwnerType.Enemy && zone == ZoneType.Hand)
     {
-        // プレイヤー手札
-        if (owner == OwnerType.Player && zone == ZoneType.Hand)
-            HandFanLayout.I?.Layout();
-
-        // ★敵手札（裏面扇形）
-        if (owner == OwnerType.Enemy && zone == ZoneType.Hand)
-        {
-            EnemyHandFanLayout.I?.Layout();
-            EnemyHandCountUI.I?.Refresh();
-        }
-
-        // プレイヤーマナ（必要なら）
-        if (owner == OwnerType.Player && zone == ZoneType.Mana)
-            ManaStackLayout.I?.Layout();
-
-        // バトル（両方横並び）
-        if (zone == ZoneType.Battle)
-        {
-            var anchor = GetAnchor(owner, zone);
-            BattleLineLayout.I?.Layout(anchor);
-        }
-
-        // シールドの並び（もしレイアウトスクリプトがあるなら）
-        // zone == ZoneType.Shield の時に ShieldRowLayout をかけたい場合はここで
-        // var a = GetAnchor(owner, ZoneType.Shield);
-        // a?.GetComponent<ShieldRowLayout>()?.Apply();
-
-        // シールドの並び（両方）
-        if (zone == ZoneType.Shield)
-            RefreshShieldRow(owner);
+        EnemyHandFanLayout.I?.Layout();
+        EnemyHandCountUI.I?.Refresh();
     }
+
+    // =========================
+    // Mana
+    // =========================
+
+    // プレイヤーマナ（重ねレイアウト + 分数表示更新）
+    if (owner == OwnerType.Player && zone == ZoneType.Mana)
+    {
+        ManaStackLayout.I?.Layout();
+        ManaCountUI.RefreshOwner(OwnerType.Player);
+    }
+
+    // 敵マナ（表示更新だけでもOK。レイアウトがあるならここで呼ぶ）
+    if (owner == OwnerType.Enemy && zone == ZoneType.Mana)
+    {
+        // EnemyManaStackLayout.I?.Layout(); // ←もし作るなら
+        ManaCountUI.RefreshOwner(OwnerType.Enemy);
+    }
+
+    // =========================
+    // Battle (両方横並び)
+    // =========================
+    if (zone == ZoneType.Battle)
+    {
+        var anchor = GetAnchor(owner, zone);
+        BattleLineLayout.I?.Layout(anchor);
+    }
+
+    // =========================
+    // Shield (両方横並び)
+    // =========================
+    if (zone == ZoneType.Shield)
+        RefreshShieldRow(owner);
+
+    // =========================
+    // Grave (もしレイアウトがあるなら)
+    // =========================
+    // if (zone == ZoneType.Grave)
+    // {
+    //     var a = GetAnchor(owner, ZoneType.Grave);
+    //     a?.GetComponent<GraveLayout>()?.Layout();
+    // }
+}
 
     public IReadOnlyList<CardController> GetCards(OwnerType owner, ZoneType zone)
     {
@@ -149,6 +194,11 @@ public class ZoneManager : MonoBehaviour
 
         bool removed = z.cards.Remove(card);
         if (removed) RefreshLayout(card.owner, card.currentZone);
+
+    // ✅ マナ表示更新（Player/Enemy両対応）
+    if (card.currentZone == ZoneType.Mana)
+        ManaCountUI.RefreshOwner(card.owner);
+
         return removed;
     }
 
@@ -180,8 +230,14 @@ public class ZoneManager : MonoBehaviour
         card.SetTapped(false);
         card.SetSummoningSick(false);
 
-        // 墓地のレイアウト更新（zones辞書にGraveを持つならこれが効く）
+        // ✅ 墓地は表示する
+        card.gameObject.SetActive(true);
+
         RefreshLayout(card.owner, ZoneType.Grave);
+
+        // ✅ マナ表示更新（Player/Enemy両対応）
+        // 墓地送りで「マナから減った」可能性があるので両方更新してOK
+        ManaCountUI.RefreshOwner(card.owner);
     }
 
     void RefreshShieldRow(OwnerType owner)
@@ -190,6 +246,6 @@ public class ZoneManager : MonoBehaviour
         if (a == null) return;
 
         var row = a.GetComponent<ShieldRowLayout>();
-        if (row != null) row.Apply(); // ← あなたのメソッド名が Layout/Apply/Refresh なら合わせて
+        if (row != null) row.Apply();
     }
 }

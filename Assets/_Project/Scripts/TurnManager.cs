@@ -68,6 +68,7 @@ public class TurnManager : MonoBehaviour
     {
         hasPlayedManaThisTurn = true;
         RefreshUI();
+        ManaCountUI.RefreshOwner(OwnerType.Player);
     }
 
     // 旧互換
@@ -121,6 +122,9 @@ public class TurnManager : MonoBehaviour
 
         SetPhase(TurnPhase.Main);
 
+        // Mana表示更新（ドロー後の表示揺れ対策）
+        ManaCountUI.RefreshOwner(isPlayerTurn ? OwnerType.Player : OwnerType.Enemy);
+
         if (!isPlayerTurn)
         {
             EnemyAI.I?.TakeTurn();
@@ -146,11 +150,9 @@ public class TurnManager : MonoBehaviour
                 CompleteTurn();
                 break;
             case TurnPhase.Draw:
-                // 通常ここには来ない想定（BeginTurnで処理済み）
                 SetPhase(TurnPhase.Main);
                 break;
             case TurnPhase.End:
-                // 何もしない
                 break;
         }
 
@@ -170,10 +172,7 @@ public class TurnManager : MonoBehaviour
 
     void CompleteTurn()
     {
-        // ターン切替
         isPlayerTurn = !isPlayerTurn;
-
-        // 次ターンへ
         BeginTurn();
     }
 
@@ -234,6 +233,9 @@ public class TurnManager : MonoBehaviour
         foreach (var c in used)
             c.SetTapped(true);
 
+        // ✅ 表示更新（未タップ数が減る）
+        ManaCountUI.RefreshOwner(owner);   // ✅追加
+
         return true;
     }
 
@@ -245,12 +247,15 @@ public class TurnManager : MonoBehaviour
             if (c == null) continue;
             c.SetTapped(false);
         }
+
+        // ✅ 表示更新（アンタップで未タップ数が戻る）
+        ManaCountUI.RefreshOwner(owner);   // ✅追加
     }
 
     public void EndTurnFrom(OwnerType caller)
     {
         if (caller == OwnerType.Player && !isPlayerTurn) return;
-        if (caller == OwnerType.Enemy  &&  isPlayerTurn) return;
+        if (caller == OwnerType.Enemy && isPlayerTurn) return;
 
         isPlayerTurn = !isPlayerTurn;
         BeginTurn();
@@ -267,5 +272,4 @@ public class TurnManager : MonoBehaviour
         isPlayerTurn = !isPlayerTurn;
         BeginTurn();
     }
-
 }
