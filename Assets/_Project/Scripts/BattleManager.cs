@@ -124,17 +124,18 @@ public class BattleManager : MonoBehaviour
             // 12/13は2枚ブレイク（ジョーカーは除外）
             int breakCount = (!isJoker && (attacker.Cost == 12 || attacker.Cost == 13)) ? 2 : 1;
 
-        // クリックで割るフェイズへ移行（自動ブレイクはしない）
-        if (ShieldBreakInput.I != null)
-        {
-            Debug.Log($"[Battle] Enter shield select: target={defenderOwner} count={breakCount}");
-            ShieldBreakInput.I.BeginSelect(defenderOwner, breakCount);
-        }
-        else
-        {
-            Debug.LogWarning("[Battle] ShieldBreakInput.I is NULL -> fallback auto break");
-            BreakOneShield(defenderOwner, breakCount);
-        }
+            // クリックで割るフェイズへ移行（自動ブレイクはしない）
+            if (ShieldBreakInput.I != null)
+            {
+                Debug.Log($"[Battle] Enter shield select: target={defenderOwner} count={breakCount}");
+                ShieldBreakInput.I.BeginSelect(defenderOwner, breakCount);
+                // ✅ 発光ON/OFFは ShieldBreakInput 側に一元化（ここでは触らない）
+            }
+            else
+            {
+                Debug.LogWarning("[Battle] ShieldBreakInput.I is NULL -> fallback auto break");
+                BreakOneShield(defenderOwner, breakCount);
+            }
         }
 
         yield break;
@@ -256,7 +257,7 @@ public class BattleManager : MonoBehaviour
     }
 
     // =========================
-    // シールド破壊（複数対応）
+    // シールド破壊（複数対応）※フォールバック用
     // =========================
     void BreakOneShield(OwnerType defenderOwner, int count = 1)
     {
@@ -276,7 +277,6 @@ public class BattleManager : MonoBehaviour
             }
             if (target == null) break;
 
-            //ZoneManager.I.SendToGrave(target);
             if (ShieldTriggerSystem.I != null)
             {
                 ShieldTriggerSystem.I.OnShieldBroken(target, defenderOwner);
@@ -289,8 +289,6 @@ public class BattleManager : MonoBehaviour
 
         ShieldCountUI.I?.Refresh();
     }
-
-
 
     // =========================
     // 破壊ユーティリティ

@@ -27,13 +27,9 @@ public class CardInstance
     public int id;
     public Sprite sprite;
 
-    // ✅ 表示上の数字（1〜13）
     public int rank;
-
-    // ✅ 実コスト（Aは4など）
     public int cost;
 
-    // ===== 能力 =====
     public CardType type = CardType.Creature;
 
     public bool canAttack = true;
@@ -43,7 +39,6 @@ public class CardInstance
     public bool isJoker = false;
 
     public SpellEffectType spellEffect = SpellEffectType.None;
-
     public OnSummonEffectType onSummonEffect = OnSummonEffectType.None;
 
     public CardInstance(int id, Sprite sprite)
@@ -51,26 +46,46 @@ public class CardInstance
         this.id = id;
         this.sprite = sprite;
 
-        // ✅ まず rank を決める
-        rank = ParseRankFromName(sprite ? sprite.name : "");
+        string name = sprite ? sprite.name : "NULL";
 
-        // 初期コストは rank と同じ
+        Debug.Log($"[CardInstance-CONSTRUCTOR] id={id} name={name}");
+
+        // rank決定
+        rank = ParseRankFromName(name);
         cost = rank;
 
+        Debug.Log($"[CardInstance] after ParseRank rank={rank} cost={cost}");
+
         ApplyRules();
+
+        Debug.Log(
+            $"[CardInstance-RESULT] name={name} " +
+            $"isJoker={isJoker} rank={rank} cost={cost} type={type} " +
+            $"spellEffect={spellEffect} onSummonEffect={onSummonEffect}"
+        );
     }
 
     static int ParseRankFromName(string n)
     {
-        if (string.IsNullOrEmpty(n)) return 0;
+        if (string.IsNullOrEmpty(n))
+        {
+            Debug.LogWarning("[ParseRank] empty name");
+            return 0;
+        }
 
         string digits = "";
         for (int i = 0; i < n.Length; i++)
             if (char.IsDigit(n[i])) digits += n[i];
 
+        Debug.Log($"[ParseRank] name={n} digits={digits}");
+
         if (digits.Length == 0) return 0;
 
-        if (!int.TryParse(digits, out int v)) return 0;
+        if (!int.TryParse(digits, out int v))
+        {
+            Debug.LogWarning($"[ParseRank] parse failed name={n}");
+            return 0;
+        }
 
         if (v < 0) v = 0;
         if (v > 13) v = 13;
@@ -80,7 +95,7 @@ public class CardInstance
 
     void ApplyRules()
     {
-        // ===== 初期化 =====
+        // 初期化
         type = CardType.Creature;
         canAttack = true;
         canBlock = false;
@@ -91,15 +106,17 @@ public class CardInstance
 
         string n = sprite ? sprite.name.ToLower() : "";
 
+        Debug.Log($"[ApplyRules] START name={n} rank={rank}");
+
         // =========================
         // 🃏 ジョーカー（最優先）
         // =========================
-        if (n.StartsWith("joker"))
+        if (n.StartsWith("joker") || n == "j01" || n == "j02")
         {
             isJoker = true;
 
-            rank = 13;   // 表示的にも13扱い
-            cost = 13;   // 実コストも13
+            rank = 13;
+            cost = 13;
 
             ignoreSummonSickness = true;
             canBlock = true;
@@ -108,40 +125,35 @@ public class CardInstance
             type = CardType.Creature;
             spellEffect = SpellEffectType.None;
             onSummonEffect = OnSummonEffectType.None;
-
             return;
         }
-
         // =========================
-        // 通常クリーチャールール（rank基準）
+        // 通常クリーチャー系
         // =========================
 
-        // ブロック可能：2,3,4,8,11
         if (rank == 2 || rank == 3 || rank == 4 || rank == 8 || rank == 11)
             canBlock = true;
 
-        // 攻撃できない：2,3,8
         if (rank == 2 || rank == 3 || rank == 8)
             canAttack = false;
 
-        // 召喚酔い無効：7
         if (rank == 7)
             ignoreSummonSickness = true;
 
-        // 召喚成功時効果：5,6,10,13
         if (rank == 5)  onSummonEffect = OnSummonEffectType.Card5;
         if (rank == 6)  onSummonEffect = OnSummonEffectType.Card6;
         if (rank == 10) onSummonEffect = OnSummonEffectType.Card10;
         if (rank == 13) onSummonEffect = OnSummonEffectType.Card13;
 
         // =========================
-        // 🧙 スペル：A（rank=1）
+        // 🧙 A (rank=1)
         // =========================
         if (rank == 1)
         {
-            type = CardType.Spell;
+            Debug.Log("[ApplyRules] Rank1 -> Spell A");
 
-            cost = 4; // 実コスト
+            type = CardType.Spell;
+            cost = 4;
 
             canAttack = false;
             canBlock = false;
@@ -154,12 +166,13 @@ public class CardInstance
         }
 
         // =========================
-        // 🧙 スペル：9
+        // 🧙 9
         // =========================
         if (rank == 9)
         {
-            type = CardType.Spell;
+            Debug.Log("[ApplyRules] Rank9 -> Spell");
 
+            type = CardType.Spell;
             cost = 9;
 
             canAttack = false;
@@ -172,7 +185,7 @@ public class CardInstance
             return;
         }
 
-        // それ以外は通常クリーチャー
+        // その他
         cost = rank;
     }
 }

@@ -72,52 +72,70 @@ if (zone == ZoneType.Mana)
     ManaCountUI.RefreshOwner(owner);
     }
 
-    public bool Move(CardController card, ZoneType toZone)
+public bool Move(CardController card, ZoneType toZone)
+{
+    if (card == null) return false;
+
+    // ★移動元を先に保存（後で召喚判定に使う）
+    ZoneType fromZone = card.currentZone;
+
+    var fromKey = (card.owner, card.currentZone);
+    if (!zones.TryGetValue(fromKey, out var from)) return false;
+
+    var toKey = (card.owner, toZone);
+    if (!zones.TryGetValue(toKey, out var to))
     {
-        var fromKey = (card.owner, card.currentZone);
-        if (!zones.TryGetValue(fromKey, out var from)) return false;
+        Debug.LogError($"Move failed, toZone not registered: {toKey}");
+        return false;
+    }
 
-        var toKey = (card.owner, toZone);
-        if (!zones.TryGetValue(toKey, out var to))
-        {
-            Debug.LogError($"Move failed, toZone not registered: {toKey}");
-            return false;
-        }
+    if (!from.cards.Remove(card)) return false;
 
-        if (!from.cards.Remove(card)) return false;
+    // =========================
+    // 実移動
+    // =========================
+    card.currentZone = toZone;
+    card.transform.SetParent(to.anchor, false);
 
-        card.currentZone = toZone;
-        card.transform.SetParent(to.anchor, false);
+    // ✅ マナに入ったら非表示、それ以外は表示
+    if (toZone == ZoneType.Mana)
+        card.gameObject.SetActive(false);
+    else
+        card.gameObject.SetActive(true);
 
-        // ✅ マナに入ったら非表示、それ以外は表示
-        if (toZone == ZoneType.Mana)
-            card.gameObject.SetActive(false);
-        else
-            card.gameObject.SetActive(true);
+    // ✅ 移動後に見た目（スケール等）を一括適用
+    card.ApplyZoneVisual();
 
-        // ✅ 移動後に見た目（スケール等）を一括適用
-        card.ApplyZoneVisual();
+    // ✅ 敵手札へ移動したら常に裏
+    if (card.owner == OwnerType.Enemy && toZone == ZoneType.Hand)
+    {
+        if (enemyHandBackSprite != null)
+            card.ShowBack(enemyHandBackSprite);
+    }
 
-        // ✅ 敵手札へ移動したら常に裏
-        if (card.owner == OwnerType.Enemy && toZone == ZoneType.Hand)
-        {
-            if (enemyHandBackSprite != null)
-                card.ShowBack(enemyHandBackSprite);
-        }
+    to.cards.Add(card);
 
-        to.cards.Add(card);
-
-        RefreshLayout(card.owner, fromKey.Item2);
-        RefreshLayout(card.owner, toZone);
+    RefreshLayout(card.owner, fromZone);
+    RefreshLayout(card.owner, toZone);
 
     // ✅ マナ表示更新（Player/Enemy両対応）
-    if (fromKey.Item2 == ZoneType.Mana || toZone == ZoneType.Mana)
+    if (fromZone == ZoneType.Mana || toZone == ZoneType.Mana)
     {
         ManaCountUI.RefreshOwner(card.owner);
     }
 
-        return true;
+    // =========================
+    // ✅ 召喚フック（ドラッグでもボタンでも統一）
+    // Hand -> Battle に入った瞬間を「召喚成功」とみなす
+    // =========================
+    if (fromZone == ZoneType.Hand && toZone == ZoneType.Battle)
+    {
+        // 召喚酔いなど、召喚共通処理をここで入れたいならここに集約してOK
+        SummonEffectSystem.I?.OnSummoned(card);
     }
+
+    return true;
+}
 
 void RefreshLayout(OwnerType owner, ZoneType zone)
 {

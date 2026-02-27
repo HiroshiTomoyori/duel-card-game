@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class SummonEffectSystem : MonoBehaviour
 {
@@ -11,10 +12,23 @@ public class SummonEffectSystem : MonoBehaviour
 
     public void OnSummoned(CardController card)
     {
+        Debug.Log($"[OnSummoned] name={card.name} zone={card.currentZone} isJoker={card.instance?.isJoker} type={card.instance?.type}");
         if (card == null) return;
         if (card.instance == null) return;
         if (card.currentZone != ZoneType.Battle) return;
 
+        // =========================
+        // ★ Joker 最優先処理
+        // =========================
+        if (card.instance.isJoker)
+        {
+            Effect_Joker_WipeAllExceptSelf(card);
+            return; // 他の効果は処理しない
+        }
+
+        // =========================
+        // 通常カード効果
+        // =========================
         switch (card.instance.onSummonEffect)
         {
             case OnSummonEffectType.None:
@@ -30,16 +44,47 @@ public class SummonEffectSystem : MonoBehaviour
                 Effect_Draw(card.owner, 1);
                 return;
 
-            // 10：相手手札ランダム1枚ハンデス（スペルも含む、墓地へ）
+            // 10：相手手札ランダム1枚ハンデス
             case OnSummonEffectType.Card10:
                 Effect_RandomDiscard(OpponentOf(card.owner));
                 return;
 
-            // 13：召喚成功時、山札トップをシールドに追加（回復）
+            // 13：山札トップをシールドに追加（回復）
             case OnSummonEffectType.Card13:
                 Effect_AddTopToShield(card.owner);
                 return;
         }
+    }
+
+    // =====================================================
+    // 🔥 Joker：バトル全破壊（自分以外）
+    // =====================================================
+    void Effect_Joker_WipeAllExceptSelf(CardController joker)
+    {
+        Debug.Log($"[JokerSummon] START joker={joker.name} owner={joker.owner}");
+        Debug.Log("[SummonEffect] Joker: wipe all except self");
+
+        var zm = ZoneManager.I;
+        if (zm == null) return;
+
+        foreach (OwnerType owner in System.Enum.GetValues(typeof(OwnerType)))
+        {
+            var battle = zm.GetCards(owner, ZoneType.Battle);
+            if (battle == null) continue;
+
+            // ★直接回すと壊れるのでコピー
+            var copy = new List<CardController>(battle);
+
+            foreach (var c in copy)
+            {
+                if (c == null) continue;
+                if (c == joker) continue;
+
+                zm.SendToGrave(c);
+            }
+        }
+
+        Debug.Log("[SummonEffect] Joker resolved: only joker remains");
     }
 
     // =========================
@@ -76,7 +121,7 @@ public class SummonEffectSystem : MonoBehaviour
     }
 
     // =========================
-    // 10) ランダムハンデス（手札→墓地）
+    // 10) ランダムハンデス
     // =========================
     void Effect_RandomDiscard(OwnerType targetOwner)
     {
@@ -96,7 +141,7 @@ public class SummonEffectSystem : MonoBehaviour
     }
 
     // =========================
-    // 13) 山札トップをシールドへ（回復）
+    // 13) 山札トップをシールドへ
     // =========================
     void Effect_AddTopToShield(OwnerType owner)
     {
@@ -108,8 +153,7 @@ public class SummonEffectSystem : MonoBehaviour
         var added = deck.DrawTopToZone(owner, ZoneType.Shield);
         if (added == null) return;
 
-        // シールドは裏＆非表示運用（DeckFromSprites側でもやってるが、保険で）
-        added.ShowBack(null);          // backSpriteを持ってないなら無理に触らない
+        added.ShowBack(null);
         added.gameObject.SetActive(false);
 
         ShieldCountUI.I?.Refresh();

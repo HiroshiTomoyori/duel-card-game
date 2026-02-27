@@ -18,6 +18,11 @@ public class TurnManager : MonoBehaviour
     public bool hasPlayedManaThisTurn { get; private set; } = false;
     public TurnPhase CurrentPhase { get; private set; } = TurnPhase.Draw;
 
+    // ✅ 追加ターン（Joker魔法など）
+    // 「次のターンも同じ側」にしたいときに、現在ターン側のOwnerを入れる
+    // スタック不可（1回分のみ）
+    OwnerType? extraTurnOwner = null;
+
     [Header("UI")]
     public TMP_Text turnText; // CanvasのTxt_Turn
 
@@ -73,6 +78,21 @@ public class TurnManager : MonoBehaviour
 
     // 旧互換
     public void OnManaPlayed() => OnPlayedMana();
+
+    // =========================
+    // Extra Turn (Public API)
+    // =========================
+
+    /// <summary>
+    /// ✅ 追加ターンを付与する（このターンの後、同じOwnerがもう一度ターンを行う）
+    /// デフォはスタック不可：すでに予約済みなら何もしない
+    /// </summary>
+    public void GrantExtraTurn(OwnerType owner)
+    {
+        if (extraTurnOwner.HasValue) return;
+        extraTurnOwner = owner;
+        Debug.Log($"[TurnManager] ExtraTurn granted to {owner}");
+    }
 
     // =========================
     // Turn / Phase flow
@@ -170,10 +190,28 @@ public class TurnManager : MonoBehaviour
         RefreshUI();
     }
 
-    void CompleteTurn()
+    // ✅ ここで「次ターンに進む」を一本化
+    void TransitionToNextTurn()
     {
+        var currentOwner = isPlayerTurn ? OwnerType.Player : OwnerType.Enemy;
+
+        // ✅ 追加ターンが現在のownerに予約されているなら、反転せずもう一度同じ側
+        if (extraTurnOwner.HasValue && extraTurnOwner.Value == currentOwner)
+        {
+            extraTurnOwner = null;
+            Debug.Log($"[TurnManager] ExtraTurn consumed by {currentOwner}");
+            BeginTurn();
+            return;
+        }
+
+        // ✅ 通常
         isPlayerTurn = !isPlayerTurn;
         BeginTurn();
+    }
+
+    void CompleteTurn()
+    {
+        TransitionToNextTurn();
     }
 
     void SetPhase(TurnPhase phase)
@@ -234,7 +272,7 @@ public class TurnManager : MonoBehaviour
             c.SetTapped(true);
 
         // ✅ 表示更新（未タップ数が減る）
-        ManaCountUI.RefreshOwner(owner);   // ✅追加
+        ManaCountUI.RefreshOwner(owner);
 
         return true;
     }
@@ -249,7 +287,7 @@ public class TurnManager : MonoBehaviour
         }
 
         // ✅ 表示更新（アンタップで未タップ数が戻る）
-        ManaCountUI.RefreshOwner(owner);   // ✅追加
+        ManaCountUI.RefreshOwner(owner);
     }
 
     public void EndTurnFrom(OwnerType caller)
@@ -257,8 +295,7 @@ public class TurnManager : MonoBehaviour
         if (caller == OwnerType.Player && !isPlayerTurn) return;
         if (caller == OwnerType.Enemy && isPlayerTurn) return;
 
-        isPlayerTurn = !isPlayerTurn;
-        BeginTurn();
+        TransitionToNextTurn();
     }
 
     public void EndTurnFromEnemy()
@@ -269,7 +306,6 @@ public class TurnManager : MonoBehaviour
 
     void SwitchTurn()
     {
-        isPlayerTurn = !isPlayerTurn;
-        BeginTurn();
+        TransitionToNextTurn();
     }
 }
