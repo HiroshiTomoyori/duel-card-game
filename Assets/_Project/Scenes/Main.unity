@@ -3210,7 +3210,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxSpreadX: 520
   maxStepX: 170
-  y: 0
+  playerY: 20
+  enemyY: -120
+  forceFrontCard: {fileID: 0}
 --- !u!4 &1182803559
 Transform:
   m_ObjectHideFlags: 0

@@ -56,6 +56,7 @@ public class CardController : MonoBehaviour, IPointerClickHandler
     // ================================
     public void OnPointerClick(PointerEventData eventData)
     {
+        Debug.Log("カードクリックされた");
         // シールド選択中
         if (ShieldBreakInput.I != null && ShieldBreakInput.I.IsSelecting)
         {

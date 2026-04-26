@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 
-
 [RequireComponent(typeof(RectTransform))]
 [RequireComponent(typeof(CardController))]
 public class CardDrag : MonoBehaviour,
@@ -57,6 +56,7 @@ public class CardDrag : MonoBehaviour,
 
         cg.blocksRaycasts = false;
 
+        // ⭐ 最前面へ（ドラッグ中）
         transform.SetParent(rootCanvas.transform, true);
         transform.SetAsLastSibling();
 
@@ -89,7 +89,7 @@ public class CardDrag : MonoBehaviour,
 
         cg.blocksRaycasts = true;
 
-        // ★Raycastを自前で取り直す
+        // ⭐ Raycastを自前で取得（DropHit対策）
         var results = new List<RaycastResult>();
         EventSystem.current.RaycastAll(eventData, results);
 
@@ -100,8 +100,8 @@ public class CardDrag : MonoBehaviour,
         {
             if (r.gameObject == null) continue;
 
-            // ★自分（カード）配下を全部除外する
-            if (r.gameObject.transform.IsChildOf(transform)) 
+            // ⭐ 自分の子は無視
+            if (r.gameObject.transform.IsChildOf(transform))
                 continue;
 
             hitGo = r.gameObject;
@@ -128,7 +128,8 @@ public class CardDrag : MonoBehaviour,
 
     bool TryMove(ZoneType toZone)
     {
-        Debug.Log($"[TryMove] toZone={toZone} phase={TurnManager.I?.CurrentPhase} playedMana={TurnManager.I?.hasPlayedManaThisTurn}");
+        Debug.Log($"[TryMove] toZone={toZone} phase={TurnManager.I?.CurrentPhase}");
+
         if (card.owner != OwnerType.Player) return false;
         if (card.currentZone != ZoneType.Hand) return false;
 
@@ -161,7 +162,13 @@ public class CardDrag : MonoBehaviour,
             bool ok = ZoneManager.I.Move(card, ZoneType.Battle);
 
             if (ok)
+            {
                 card.SetSummoningSick(true);
+
+                // ⭐ ここが重要：出たカードを最前面に固定
+                if (BattleLineLayout.I != null)
+                    BattleLineLayout.I.forceFrontCard = card;
+            }
 
             return ok;
         }
@@ -175,7 +182,6 @@ public class CardDrag : MonoBehaviour,
 
     void HighlightValidZones(bool on)
     {
-        Debug.Log($"[Highlight] on={on}");
         foreach (var zone in allZones)
         {
             bool valid = false;

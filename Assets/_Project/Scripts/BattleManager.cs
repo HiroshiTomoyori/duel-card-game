@@ -30,26 +30,29 @@ public class BattleManager : MonoBehaviour
     // =========================
     // 攻撃可能判定（各カード1回＝タップ管理）
     // =========================
-    bool CanAttack(CardController attacker)
+    
+bool CanAttack(CardController attacker)
+{
+    if (attacker == null)
     {
-        if (attacker == null) return false;
-
-        int cost = attacker.Cost;
-
-        // ✅ コスト2,3,8は攻撃不可
-        if (cost == 2 || cost == 3 || cost == 8)
-            return false;
-
-        // 召喚酔い中は攻撃不可
-        if (attacker.SummoningSick) return false;
-
-        // タップ中は攻撃不可（＝そのターン既に攻撃した）
-        if (attacker.IsTapped) return false;
-
-        if (!attacker.CanAttackBase) return false;
-
-        return true;
+        Debug.Log("attacker is NULL");
+        return false;
     }
+
+    int cost = attacker.Cost;
+
+    Debug.Log($"[CanAttack] cost={cost} sick={attacker.SummoningSick} tapped={attacker.IsTapped} base={attacker.CanAttackBase}");
+
+    // ↓今の判定
+    if (cost == 2 || cost == 3 || cost == 8)
+        return false;
+
+    if (attacker.SummoningSick) return false;
+    if (attacker.IsTapped) return false;
+    if (!attacker.CanAttackBase) return false;
+
+    return true;
+}
 
     // =========================
     // 公開API：攻撃宣言

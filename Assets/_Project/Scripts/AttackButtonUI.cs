@@ -27,6 +27,7 @@ public class AttackButtonUI : MonoBehaviour
 
     public void Show(CardController attackerCard)
     {
+        Debug.Log("[AttackButtonUI] Show called");
         attacker = attackerCard;
 
         if (attacker == null)

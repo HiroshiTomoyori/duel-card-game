@@ -5,13 +5,15 @@ public class BattleLineLayout : MonoBehaviour
 {
     public static BattleLineLayout I;
 
-    [Header("Horizontal")]
+    [Header("Tuning (pixels)")]
     public float maxSpreadX = 520f;
     public float maxStepX = 170f;
 
-    [Header("Vertical")]
-    public float playerY = 20f;
-    public float enemyY = -120f;
+    public float playerY = 0f;      // プレイヤー高さ
+    public float enemyY = -80f;     // 敵だけ下げる
+
+    // ⭐ 追加：このカードを最前面にする
+    public CardController forceFrontCard;
 
     void Awake()
     {
@@ -22,43 +24,49 @@ public class BattleLineLayout : MonoBehaviour
     {
         if (!battleAnchor) return;
 
-        List<RectTransform> cards = new List<RectTransform>();
-
+        // 対象カード収集
+        var cards = new List<RectTransform>();
         foreach (Transform child in battleAnchor)
         {
-            CardController c = child.GetComponent<CardController>();
-            if (c == null) continue;
-
-            if (child is RectTransform rt)
-                cards.Add(rt);
+            if (child.GetComponent<CardController>() == null) continue;
+            if (child is RectTransform rt) cards.Add(rt);
         }
 
         int n = cards.Count;
         if (n == 0) return;
 
+        // 横配置計算
         float total = Mathf.Min(maxSpreadX, maxStepX * (n - 1));
-        float step = (n <= 1) ? 0 : total / (n - 1);
+        float step = (n <= 1) ? 0f : total / (n - 1);
         float startX = -total * 0.5f;
 
-        // ⭐ 敵かプレイヤーかをOwnerで判定
-        CardController cc = cards[0].GetComponent<CardController>();
-        bool isEnemy = cc.owner == OwnerType.Enemy;
+        // ⭐ 敵かプレイヤーか判定
+        float y = battleAnchor.name.Contains("Enemy")
+            ? enemyY
+            : playerY;
 
-        float y = isEnemy ? enemyY : playerY;
-
+        // 配置
         for (int i = 0; i < n; i++)
         {
-            RectTransform rt = cards[i];
+            var rt = cards[i];
 
-            rt.anchoredPosition = new Vector2(
-                startX + step * i,
-                y
-            );
-
+            rt.anchoredPosition = new Vector2(startX + step * i, y);
             rt.localRotation = Quaternion.identity;
 
-            // ⭐ 描画順安定
+            // 通常順序
             rt.SetSiblingIndex(i);
+        }
+
+        // ⭐ 最重要：特定カードを最前面へ
+        if (forceFrontCard != null)
+        {
+            var rt = forceFrontCard.GetComponent<RectTransform>();
+
+            // 同じバトルゾーンにいるときだけ前に出す
+            if (rt != null && rt.parent == battleAnchor)
+            {
+                rt.SetAsLastSibling();
+            }
         }
     }
 }

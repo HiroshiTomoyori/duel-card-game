@@ -60,6 +60,7 @@ public class Deck52 : MonoBehaviour
         }
 
         HandFanLayout.I?.Layout();
+        //HandLineLayout.I?.Layout(originalParent);
     }
 
     void Shuffle(List<CardId> list)
